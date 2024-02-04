@@ -1,0 +1,31 @@
+@node institutioninstructions
+@appendix Instructions for Virginia Tech students
+
+@c ------------------ not currently included in documentation -------------------------
+These instructions pertains only to usage at Virginia Tech.
+
+As of Spring 2022, most of the files related to Pintos can be found at
+@file{/web/courses/cs4284/pintostools/bin}. We recommend adding this to your PATH.
+
+@file{/web/courses/cs4284/pintostools/bin/pintos} is the script we use to run Pintos.
+
+RLogin supports KVM, therefore Pintos can also be run under qemu's KVM
+acceleration support. This can make Pintos run about 5x faster.
+This is particularly helpful if you are trying to reproduce a rare race condition.
+We will not use KVM during grading, and we do 
+not recommend using it for Project 1, where tests make assumptions on how fast
+programs are expected to run. To see if your personal computer
+supports KVM, check if @file{/dev/kvm} exists. Note that VirtualBox does not
+provide guest operating systems with the KVM module. Finally, be aware that
+KVM can sometimes make GDB extremely frustrating to use.
+
+We encourage you to develop and test on a local machine. 
+There is an easy way to do this.
+
+For now, we DON'T encourage Bochs. It has not been tested under the new system
+at all. None of the tests will run the Bochs emulator.
+
+Since this is our first semester releasing the updated version of Pintos, please 
+let us know if you think you may have found bugs in the base code, or 
+if think any clarifications should be made. Email Lance Chao at @email{kisseki@@vt.edu}.
+

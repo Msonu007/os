@@ -1,0 +1,79 @@
+# -*- makefile -*-
+
+# Test names.
+tests/threads_TESTS = $(addprefix tests/threads/, \
+alarm-single \
+alarm-multiple \
+alarm-zero \
+alarm-negative \
+alarm-synch \
+cfs-create-new \
+cfs-idle \
+cfs-yield \
+cfs-tick \
+cfs-delayed-tick \
+cfs-sleeper \
+cfs-short-sleeper \
+cfs-sleeper-minvruntime \
+cfs-new-minvruntime \
+cfs-nice \
+cfs-renice \
+cfs-idle-unblock \
+cfs-vruntime \
+cfs-run-batch \
+cfs-run-iobound \
+balance \
+balance-synch1 \
+balance-synch2 \
+)
+
+# Sources for tests.
+tests/threads_SRC  = tests/threads/tests.c
+tests/threads_SRC += tests/threads/cfstest.c
+tests/threads_SRC += tests/threads/simulator.c
+tests/threads_SRC += tests/threads/alarm-wait.c
+tests/threads_SRC += tests/threads/alarm-synch.c
+tests/threads_SRC += tests/threads/alarm-zero.c
+tests/threads_SRC += tests/threads/alarm-negative.c
+tests/threads_SRC += tests/threads/cfs-run-batch.c
+tests/threads_SRC += tests/threads/cfs-run-iobound.c
+tests/threads_SRC += tests/threads/cfs-create-new.c
+tests/threads_SRC += tests/threads/cfs-delayed-tick.c
+tests/threads_SRC += tests/threads/cfs-idle.c
+tests/threads_SRC += tests/threads/cfs-idle-unblock.c
+tests/threads_SRC += tests/threads/cfs-new-minvruntime.c
+tests/threads_SRC += tests/threads/cfs-nice.c
+tests/threads_SRC += tests/threads/cfs-renice.c
+tests/threads_SRC += tests/threads/cfs-short-sleeper.c
+tests/threads_SRC += tests/threads/cfs-sleeper.c
+tests/threads_SRC += tests/threads/cfs-sleeper-minvruntime.c
+tests/threads_SRC += tests/threads/cfs-tick.c
+tests/threads_SRC += tests/threads/cfs-tick2.c
+tests/threads_SRC += tests/threads/cfs-vruntime.c
+tests/threads_SRC += tests/threads/cfs-yield.c
+tests/threads_SRC += tests/threads/balance.c
+tests/threads_SRC += tests/threads/balance-synch1.c
+tests/threads_SRC += tests/threads/balance-synch2.c
+
+# Set timeouts for longer tests
+tests/threads/cfs-run-batch.output: TIMEOUT = 180
+tests/threads/cfs-run-iobound.output: TIMEOUT = 600
+tests/threads/balance.output: TIMEOUT = 120
+tests/threads/balance-synch1.output: TIMEOUT = 900
+tests/threads/balance-synch2.output: TIMEOUT = 600
+
+# Set CFS tests to run single-threaded, to improve debugging experience
+tests/threads/cfs-create-new.output: SMP = 1
+tests/threads/cfs-delayed-tick.output: SMP = 1
+tests/threads/cfs-idle.output: SMP = 1
+tests/threads/cfs-idle-unblock.output: SMP = 1
+tests/threads/cfs-new-minvruntime.output: SMP = 1
+tests/threads/cfs-nice.output: SMP = 1
+tests/threads/cfs-renice.output: SMP = 1
+tests/threads/cfs-short-sleeper.output: SMP = 1
+tests/threads/cfs-sleeper.output: SMP = 1
+tests/threads/cfs-sleeper-minvruntime.output: SMP = 1
+tests/threads/cfs-tick.output: SMP = 1
+tests/threads/cfs-tick2.output: SMP = 1
+tests/threads/cfs-vruntime.output: SMP = 1
+tests/threads/cfs-yield.output: SMP = 1

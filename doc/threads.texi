@@ -1,0 +1,951 @@
+@node Project 1--Threads
+@chapter Project 1: Threads
+
+In this assignment, we give you a minimally functional thread system.
+Your job is to extend the functionality of this system to gain a
+better understanding of synchronization problems.
+
+You will be working primarily in the @file{threads} directory for
+this assignment, with some work in the @file{devices} directory on the
+side.  Compilation should be done in the @file{threads} directory.
+
+Before you read the description of this project, you should read all of
+the following sections: @ref{Introduction}, @ref{Coding Standards},
+@ref{Debugging Tools}, and @ref{Development Tools}.  You should at least
+skim the material from @ref{Pintos Loading} through @ref{Memory
+Allocation}, especially @ref{Synchronization}.  To complete this project
+you will also need to read @ref{Completely Fair Scheduler}.
+
+@menu
+* Project 1 Background::        
+* Project 1 Requirements::      
+* Project 1 Tests::
+* Project 1 FAQ::               
+@end menu
+
+@node Project 1 Background
+@section Background
+
+
+@menu
+* Understanding Threads::       
+* Understanding CPUs::
+* Project 1 Source Files::      
+* Project 1 Synchronization::   
+* Development Suggestions::     
+@end menu
+
+@node Understanding Threads
+@subsection Understanding Threads
+
+The first step is to read and understand the code for the initial thread
+system.
+Pintos already implements thread creation and thread completion,
+a simple scheduler to switch between threads, and synchronization
+primitives (semaphores, locks, condition variables, and optimization
+barriers).
+
+Some of this code might seem slightly mysterious.  If
+you haven't already compiled and run the base system, as described in
+the introduction (@pxref{Introduction}), you should do so now.  You
+can read through parts of the source code to see what's going
+on.  If you like, you can add calls to @func{printf} almost
+anywhere, then recompile and run to see what happens and in what
+order.  You can also run the kernel in a debugger and set breakpoints
+at interesting spots, single-step through code and examine data, and
+so on.
+
+When a thread is created, you are creating a new context to be
+scheduled.  You provide a function to be run in this context as an
+argument to @func{thread_create}.  The first time the thread is
+scheduled and runs, it starts from the beginning of that function
+and executes in that context.  When the function returns, the thread
+terminates.  Each thread, therefore, acts like a mini-program running
+inside Pintos, with the function passed to @func{thread_create}
+acting like @func{main}.
+
+At any given time, exactly one thread runs on each CPU.
+The remaining threads, if any, become inactive.
+The scheduler decides which thread to run next on a CPU.
+(If no thread is ready to run at any given time, then the
+special ``idle'' thread, implemented in @func{idle}, runs.)
+Synchronization primitives can force context switches when one
+thread needs to wait for another thread to do something.
+
+The mechanics of a context switch are
+in @file{threads/switch.S}, which is 80@var{x}86
+assembly code.  (You don't have to understand it.)  It saves the
+state of the currently running thread and restores the state of the
+thread we're switching to.
+
+Using the GDB debugger, slowly trace through a context
+switch to see what happens (@pxref{GDB}).  You can set a
+breakpoint on @func{schedule} to start out, and then
+single-step from there.@footnote{GDB might tell you that
+@func{schedule} doesn't exist, which is arguably a GDB bug.
+You can work around this by setting the breakpoint by filename and
+line number, e.g.@: @code{break thread.c:@var{ln}} where @var{ln} is
+the line number of the first declaration in @func{schedule}.}  Be sure
+to keep track of each thread's address
+and state, and what procedures are on the call stack for each thread.
+You will notice that when one thread calls @func{switch_threads},
+another thread starts running, and the first thing the new thread does
+is to return from @func{switch_threads}.  You will understand the thread
+system once you understand why and how the @func{switch_threads} that
+gets called is different from the @func{switch_threads} that returns.
+@xref{Thread Switching}, for more information.
+
+@strong{Warning}: In Pintos, each thread is assigned a small,
+fixed-size execution stack just under @w{4 kB} in size.  The kernel
+tries to detect stack overflow, but it cannot do so perfectly.  You
+may cause bizarre problems, such as mysterious kernel panics, if you
+declare large data structures as non-static local variables,
+e.g. @samp{int buf[1000];}.  Alternatives to stack allocation include
+the page allocator and the block allocator (@pxref{Memory Allocation}).
+
+@node Understanding CPUs
+@subsection Understanding CPUs
+
+In an operating system that supports multiple CPUs, such as this version
+of Pintos, each CPU must be independently managed.  For instance, the
+OS needs to track keep of which threads are currently assigned to
+that CPU, and which thread is currently running on that CPU (or whether
+that CPU's idle thread is running).
+
+Per-CPU information is also used for interrupt management, as multiple
+CPUs may each be handling interrupts.
+
+@xref{Struct CPU}. for full details of how a CPU is represented in Pintos.
+
+@node Project 1 Source Files
+@subsection Source Files
+
+Here is a brief overview of the files in the @file{threads}
+directory.  You will not need to modify most of this code, but the
+hope is that presenting this overview will give you a start on what
+code to look at.
+
+@table @file
+@item loader.S
+@itemx loader.h
+The kernel loader.  Assembles to 512 bytes of code and data that the
+PC BIOS loads into memory and which in turn finds the kernel on disk,
+loads it into memory, and jumps to @func{start} in @file{start.S}.
+@xref{Pintos Loader}, for details.  You should not need to look at
+this code or modify it.
+
+@item start.S
+Does basic setup needed for memory protection and 32-bit
+operation on 80@var{x}86 CPUs.  Unlike the loader, this code is
+actually part of the kernel.  @xref{Low-Level Kernel Initialization},
+for details. Jumps to @func{main}
+
+@item startother.S
+Similar to start.S, but whereas start.S is executed by the Bootstrap
+processor (@acronym{BSP}), startother.S is executed by application 
+processors (@acronym{AP}). Jumps to @func{mpenter}
+
+@item kernel.lds.S
+The linker script used to link the kernel.  Sets the load address of
+the kernel and arranges for @file{start.S} to be near the beginning
+of the kernel image.  @xref{Pintos Loader}, for details. Again, you
+should not need to look at this code
+or modify it, but it's here in case you're curious.
+
+@item init.c
+@itemx init.h
+Kernel initialization, including @func{main}, the kernel's ``main
+program.''  You should look over @func{main} at least to see what
+gets initialized.  You might want to add your own initialization code
+here.  @xref{High-Level Kernel Initialization}, for details.
+
+@item thread.c
+@itemx thread.h
+Basic thread support.  Much of your work will take place in these files.
+@file{thread.h} defines @struct{thread}, which you are likely to modify
+in all four projects.  See @ref{struct thread} and @ref{Threads} for
+more information.
+
+@item switch.S
+@itemx switch.h
+Assembly language routine for switching threads.  Already discussed
+above.  @xref{Thread Functions}, for more information.
+
+@item palloc.c
+@itemx palloc.h
+Page allocator, which hands out system memory in multiples of 4 kB
+pages.  @xref{Page Allocator}, for more information.
+
+@item malloc.c
+@itemx malloc.h
+A simple implementation of @func{malloc} and @func{free} for
+the kernel.  @xref{Block Allocator}, for more information.
+
+@item mp.c
+@item mp.h
+Parses the MP Configuration Table left by the BIOS. 
+Used to discover how many CPUs are available to the operating system.
+
+@item interrupt.c
+@itemx interrupt.h
+Basic interrupt handling and functions for turning interrupts on and
+off.  @xref{Interrupt Handling}, for more information.
+
+@item intr-stubs.S
+@itemx intr-stubs.h
+Assembly code for low-level interrupt handling.  @xref{Interrupt
+Infrastructure}, for more information.
+
+@item spinlock.c
+@itemx spinlock.h
+Implementation of spinlocks.  Spinlocks are low-level synchronization
+primitives.  Some parts of the kernel use them directly, but because of
+their restrictions, usually higher-level synchronization primitives
+such as locks or semaphores are being used.
+@xref{Synchronization}, for more information.
+
+@item synch.c
+@itemx synch.h
+Basic synchronization primitives: semaphores, locks, condition
+variables, and optimization barriers.  You will need to use these for
+synchronization in all
+four projects.  @xref{Synchronization}, for more information.
+
+@item gdt.c
+@itemx gdt.h
+The 80@var{x}86 is a segmented architecture.  The Global Descriptor
+Table (GDT) is a table that describes the segments in use.  These
+files set up the GDT.  You should not need to modify these
+files for any of the projects.  You can read the code if
+you're interested in how the GDT works.
+
+@item tss.c
+@itemx tss.h
+The Task-State Segment (TSS) is used for 80@var{x}86 architectural
+task switching.  Pintos uses the TSS only for switching stacks when a
+user process enters an interrupt handler, as does Linux.  You
+should not need to modify these files for any of the projects.
+You can read the code if you're interested in how the TSS
+works.
+
+@item io.h
+Functions for I/O port access.  This is mostly used by source code in
+the @file{devices} directory that you won't have to touch.
+
+@item vaddr.h
+@itemx pte.h
+Functions and macros for working with virtual addresses and page table
+entries.  These will be more important to you in project 3.  For now,
+you can ignore them.
+
+@item flags.h
+Macros that define a few bits in the 80@var{x}86 ``flags'' register.
+Probably of no interest.  See @bibref{IA32-v1}, section 3.4.3, ``EFLAGS
+Register,'' for more information.
+@end table
+
+@menu
+* devices code::                
+* lib files::                   
+@end menu
+
+@node devices code
+@subsubsection @file{devices} code
+
+The basic threaded kernel also includes these files in the
+@file{devices} directory:
+
+@table @file
+@item timer.c
+@itemx timer.h
+System timer that ticks, by default, 1000 times per second.  You will
+modify this code in this project.
+
+@item vga.c
+@itemx vga.h
+VGA display driver.  Responsible for writing text to the screen.
+You should have no need to look at this code.  @func{printf}
+calls into the VGA display driver for you, so there's little reason to
+call this code yourself.
+
+@item serial.c
+@itemx serial.h
+Serial port driver.  Again, @func{printf} calls this code for you,
+so you don't need to do so yourself.
+It handles serial input by passing it to the input layer (see below).
+
+@item block.c
+@itemx block.h
+An abstraction layer for @dfn{block devices}, that is, random-access,
+disk-like devices that are organized as arrays of fixed-size blocks.
+Out of the box, Pintos supports two types of block devices: IDE disks
+and partitions.  Block devices, regardless of type, won't actually be
+used until project 2.
+
+@item ide.c
+@itemx ide.h
+Supports reading and writing sectors on up to 4 IDE disks.
+
+@item partition.c
+@itemx partition.h
+Understands the structure of partitions on disks, allowing a single
+disk to be carved up into multiple regions (partitions) for
+independent use.
+
+@item kbd.c
+@itemx kbd.h
+Keyboard driver.  Handles keystrokes passing them to the input layer
+(see below).
+
+@item input.c
+@itemx input.h
+Input layer.  Queues input characters passed along by the keyboard or
+serial drivers.
+
+@item intq.c
+@itemx intq.h
+Interrupt queue, for managing a circular queue that both kernel
+threads and interrupt handlers want to access.  Used by the keyboard
+and serial drivers.
+
+@item rtc.c
+@itemx rtc.h
+Real-time clock driver, to enable the kernel to determine the current
+date and time.  By default, this is only used by @file{thread/init.c}
+to choose an initial seed for the random number generator.
+
+@item speaker.c
+@itemx speaker.h
+Driver that can produce tones on the PC speaker.
+
+@item pit.c
+@itemx pit.h
+Code to configure the 8254 Programmable Interrupt Timer.  This code is
+used by both @file{devices/timer.c} and @file{devices/speaker.c}
+because each device uses one of the PIT's output channel.
+
+@item ioapic.c
+@itemx ioapic.h
+Configures the I/O Advanced Programmable Interrupt Controller. The function @func{ioapicenable} is called by several device drivers during initialization. All I/O drivers in PintOS routes I/O interrupts to CPU0. 
+
+@item lapic.c
+@itemx lapic.h
+Configures the Local Advanced Programmable Interrupt Controller, which is built into every CPU. It provides timer interrupts for each CPU and generates inter-processor interrupts (@acronym{IPI}) to other CPUs.  
+
+@end table
+
+@node lib files
+@subsubsection @file{lib} files
+
+Finally, @file{lib} and @file{lib/kernel} contain useful library
+routines.  (@file{lib/user} will be used by user programs, starting in
+project 2, but it is not part of the kernel.)  Here's a few more
+details:
+
+@table @file
+@item ctype.h
+@itemx inttypes.h
+@itemx limits.h
+@itemx stdarg.h
+@itemx stdbool.h
+@itemx stddef.h
+@itemx stdint.h
+@itemx stdio.c
+@itemx stdio.h
+@itemx stdlib.c
+@itemx stdlib.h
+@itemx string.c
+@itemx string.h
+A subset of the standard C library.  @xref{C99}, for
+information
+on a few recently introduced pieces of the C library that you might
+not have encountered before.  @xref{Unsafe String Functions}, for
+information on what's been intentionally left out for safety.
+
+@item debug.c
+@itemx debug.h
+Functions and macros to aid debugging.  @xref{Debugging Tools}, for
+more information.
+
+@item random.c
+@itemx random.h
+Pseudo-random number generator.  The actual sequence of random values
+will not vary from one Pintos run to another, unless you do one of
+three things: specify a new random seed value on the @option{-rs}
+kernel command-line option on each run, or use a simulator other than
+Bochs, or specify the @option{-r} option to @command{pintos}.
+
+@item atomic-ops.c
+@itemx atomic-ops.h
+Atomic instructions
+
+@item round.h
+Macros for rounding.
+
+@item syscall-nr.h
+System call numbers.  Not used until project 2.
+
+@item kernel/list.c
+@itemx kernel/list.h
+Doubly linked list implementation.  Used all over the Pintos code, and
+you'll probably want to use it a few places yourself in project 1.
+
+@item kernel/bitmap.c
+@itemx kernel/bitmap.h
+Bitmap implementation.  You can use this in your code if you like, but
+you probably won't have any need for it in project 1.
+
+@item kernel/hash.c
+@itemx kernel/hash.h
+Hash table implementation.  Likely to come in handy for project 3.
+
+@item kernel/console.c
+@itemx kernel/console.h
+@item kernel/stdio.h
+Implements @func{printf} and a few other functions.
+@end table
+
+@node Project 1 Synchronization
+@subsection Synchronization
+
+Proper synchronization is an important part of the solutions to these
+problems.  We strongly recommend that you first read the tour section on
+synchronization (@pxref{Synchronization}) or the comments in
+@file{threads/synch.c} to learn what synchronization constructs Pintos
+provides and which to use for what situations.  In particular, it is 
+important to know when a spinlock should be acquired as opposed to a 
+lock (and vice versa).
+
+Disabling interrupts as a synchronization technique would work on a
+uniprocessor system, but not on Pintos: if a thread on one CPU 
+disables interrupts it will disable interrupts only on that CPU,
+providing no synchronization with threads running on other CPUs.
+
+Yet, to prevent the current thread from being preempted on its CPU,
+spinlocks do disable interrupts during the entire period they are held.
+This can have implications on performance, therefore you should hold
+spinlocks, and thus disable interrupts, for the least amount of code 
+possible, or you can end up losing important things such as timer ticks 
+or input events.  Turning off interrupts for any reason also increases 
+the interrupt handling latency, which can make a machine feel sluggish 
+if taken too far.
+
+@c but we left debugging code in synch.c and spinlock.c....
+Disabling interrupts can be useful for debugging when running Pintos
+on a single CPU, if you want to make
+sure that a section of code is not interrupted.  You should remove
+debugging code before turning in your project.  (Don't just comment it
+out, because that can make the code difficult to read.)
+
+There should be no busy waiting in your submission.  A tight loop that
+calls @func{thread_yield} is one form of busy waiting.
+
+@node Development Suggestions
+@subsection Development Suggestions
+
+In the past, many groups divided the assignment into pieces, then each
+group member worked on his or her piece until just before the
+deadline, at which time the group reconvened to combine their code and
+submit.  @strong{This is a bad idea.  We do not recommend this
+approach.}  Groups that do this often find that two changes conflict
+with each other, requiring lots of last-minute debugging.  Some groups
+who have done this have turned in code that did not even compile or
+boot, much less pass any tests.
+
+@localcvspolicy{}
+
+You should expect to run into bugs that you simply don't understand
+while working on this and subsequent projects.  When you do,
+reread the appendix on debugging tools, which is filled with
+useful debugging tips that should help you to get back up to speed
+(@pxref{Debugging Tools}).  Be sure to read the section on backtraces
+(@pxref{Backtraces}), which will help you to get the most out of every
+kernel panic or assertion failure.
+
+@node Project 1 Requirements
+@section Requirements
+
+@menu
+* Project 1 Design Document::   
+* Alarm Clock::                 
+* Fair Scheduler::          
+* Load Balancer::
+@end menu
+
+@node Project 1 Design Document
+@subsection Design Document
+
+@c Each group member should turn in a design description via the class website,
+@c @xref{Design Document}.
+
+Before you turn in your project, you must copy @uref{threads.tmpl, , the
+project 1 design document template} into your source tree under the name
+@file{pintos/src/threads/DESIGNDOC} and fill it in.  We recommend that
+you read the design document template before you start working on the
+project.  
+
+@node Alarm Clock
+@subsection Alarm Clock
+
+To start, we ask that you implement a simple timer facility.  Timers
+are frequently used by operating for many tasks: device drivers,
+networking code, or to let processes wait for some time.
+
+Reimplement @func{timer_sleep}, defined in @file{devices/timer.c}.
+Although a working implementation is provided, it ``busy waits,'' that
+is, it spins in a loop checking the current time and calling
+@func{thread_yield} until enough time has gone by.  Reimplement it to
+avoid busy waiting.
+
+@deftypefun void timer_sleep (int64_t @var{ticks})
+Suspends execution of the calling thread until time has advanced by at
+least @w{@var{x} timer ticks}.  Unless the system is otherwise idle, the
+thread need not wake up after exactly @var{x} ticks.  Just put it on
+the ready queue after they have waited for the right amount of time.
+
+@func{timer_sleep} is useful for threads that operate in real-time,
+e.g.@: for blinking the cursor once per second.
+
+The argument to @func{timer_sleep} is expressed in timer ticks, not in
+milliseconds or any another unit.  There are @code{TIMER_FREQ} timer
+ticks per second, where @code{TIMER_FREQ} is a macro defined in
+@code{devices/timer.h}.  
+@end deftypefun
+
+Separate functions @func{timer_msleep}, @func{timer_usleep}, and
+@func{timer_nsleep} do exist for sleeping a specific number of
+milliseconds, microseconds, or nanoseconds, respectively, but these will
+call @func{timer_sleep} automatically when necessary.  You do not need
+to modify them.
+
+@c If your delays seem too short or too long, reread the explanation of the
+@c @option{-r} option to @command{pintos} (@pxref{Debugging versus
+@c Testing}).
+
+The alarm clock implementation is not needed for later projects,
+although it could be useful for project 4.
+
+@node Fair Scheduler
+@subsection Fair Scheduler
+
+Scheduling is a domain full of trade-offs in which many different
+algorithms have been developed, tested, and tuned over the years.
+
+Pintos as provided comes with a simple scheduler 
+implementation that manages each CPU's ready queue separately.
+Threads are assigned to a CPU upon creation and will never migrate
+between CPUs.  The scheduler pursues a simple round-robin
+policy: when a thread's time slice expires, it is moved to the
+end of the ready queue and whichever thread is at the front
+is scheduled. The length of a time slice is the same for
+all threads.
+
+Clearly, this simple policy lacks sophistication.
+Therefore, in this project, we ask that you implement a simplified version
+of the so-called @uref{http://people.redhat.com/mingo/cfs-scheduler/sched-design-CFS.txt,@acronym{CFS}} 
+(``Completely Fair Scheduler'')
+scheduler used in the Linux kernel since about 2009.
+
+This scheduler pursues the following goals:
+@enumerate
+@item
+Being ``fair'' to each thread.  If all threads have the same 
+importance to the user, and all threads are asking for CPU time, 
+then it should give each thread an equal amount of CPU time.
+If threads are given differing degrees of importance, it should
+assign CPU time proportionally.
+Specifically, the scheduler aims to minimize the service error, 
+defined as the difference between the
+amount of CPU time a thread should have received under ideal scheduling
+versus the amount of CPU time a thread actually did receive.
+
+@item Balance different threads' different
+scheduling needs. Threads that perform a lot of I/O require a fast
+response time to keep input and output devices busy, but need little
+CPU time. On the other hand, compute-bound threads need to receive a
+lot of CPU time to finish their work, but have no requirement for fast
+response time. Other threads lie somewhere in between, with periods of
+I/O punctuated by periods of computation, and thus have requirements
+that vary over time. 
+
+@item
+Minimizing scheduling overhead.  This is a general goal for any
+scheduler as scheduling costs are overhead that does not directly
+benefit applications.
+
+@end enumerate
+
+Often, these goals conflict with each other: generally, providing
+fairness can increase scheduling overhead, and reacting to different
+scheduling needs may adversely impact fairness.
+
+For this part of the project, you will be working primarily 
+in @file{threads/scheduler.c}.
+@xref{Completely Fair Scheduler}, for detailed requirements.
+
+Many scheduling decisions in @acronym{CFS} depends on how much CPU time
+a thread has received.  Your scheduler must calculate this by recording
+when a thread starts and when it stops using the CPU.
+You will find the function @code{timer_gettime ()} useful.
+
+@deftypefun uint64_t timer_gettime (void)
+Returns the number of nanoseconds that has passed since the OS booted.
+@end deftypefun
+
+The fair scheduler is not strictly required for any later project, 
+but should be useful.
+
+@node Load Balancer
+@subsection Load Balancer
+
+A @uref{https://en.wikipedia.org/wiki/Work-conserving_scheduler,work-conserving scheduler}
+tries to keep available CPUs busy when there are ready processes to run,
+a goal pursued by most widely used operating systems.
+
+One of the simplest ways to do this is to keep the threads in a global queue
+that is shared by all CPUs. An advantage to this approach is that it ensures
+that no CPU is idle while threads are ready to run (but are not currently
+running). However, using a global queue has two main weaknesses.
+
+The first weakness is lack of
+scalability. The global queue must be locked while choosing the next job to run.
+Locking greatly reduces performance as the number of CPUs grows. Each CPU will
+spend more and more time contenting for the global queue lock and less time
+actually running threads.
+
+The second weakness is processor affinity. A thread can build up a fair amount of
+state in the caches and TLB associated with its running CPU. It is advantageous
+to try run it on the same CPU each time, as it will run faster than if it ran on
+a different CPU where its data is far less likely to be stored in the CPU cache.
+A global queue in which threads are equally likely to be chosen by any CPU
+may not preserve processor affinity.
+
+Because of the weaknesses described above, many operating systems, including Pintos,
+use per-CPU queues.  Each CPU manages only the threads on their own queue, 
+independent of the other CPUs, thereby avoiding the scalability problem outlined
+above and improving processor affinity.
+
+Using separate, per-CPU ready queues, however, has the potential drawback in that it
+may lead to load imbalance between CPUs, which in turn can affect fairness and the ability
+to use all CPUs fully.  For instance, if CPU0 manages thread A, and 
+CPU1 manages two threads B and C, then A has exclusive access to CPU0, while 
+B and C take turns being scheduled on CPU1. A then
+is given twice as much CPU time as B and C. Even worse, imagine if thread A finishes. 
+Then CPU0 would be idle, while CPU1 is still shared between threads B and C.
+Load balancing avoids this problem by providing mechanisms and policies
+to migrate threads between CPUs so that each is shared between approximately
+the same number of threads.
+
+@b{Implement load balancing in Pintos.}
+
+In Pintos, when a thread is created, it is assigned a CPU in a round-robin fashion and
+added to its ready queue first.   Although one could imagine better policies for
+initial placement, for the purposes of this project we require that you 
+@b{DO NOT} change this, as it is an assumption made by the load balance tests. 
+
+As shown by the example above, this simple placement policy does not guarantee that CPUs 
+will be balanced because the threads initially placed on one CPU may finish faster
+than those placed on another, causing the former to become idle.
+
+Thus, a good load balancing strategy should pursue the following goals:
+@enumerate
+@item
+No CPU should be idle while there are ready threads
+in any CPU's ready queue.
+
+@item
+Each CPU should be equally loaded to maximize fairness.
+
+@item
+Wherever possible, minimize the migration of threads, since migrating a thread
+to a different CPU diminishes their processor affinity.
+
+@end enumerate
+
+In this assignment, we ask that you implement the load balancing
+policy used by the CFS scheduler, which uses a load metric that is
+specific to it.
+
+You should create a function called @func{load_balance} and call it
+from appropriate places.
+
+@deftypefun void sched_load_balance (void)
+Pull threads from another CPU's ready queue and add
+it to the current CPU's ready queue.
+@xref{Load Balancing}, to see the detailed requirements.
+@end deftypefun
+
+It is up to you how frequently you call @func{load_balance}; at the very least, 
+load balancing must be performed inside the idle loop to avoid missing
+when there are available threads in other CPUs' ready queues.
+
+In the presence of load balancing, care must be taken whenever accessing the
+data structure representing the current CPU.  You must avoid a scenario where
+a thread reads the current CPU value (via @func{get_cpu ()} or by accessing
+@func{thread_current ()->cpu}) and has been migrated by the load balancer
+to another CPU by the time it is ready to use that value.  The easiest way
+to do that is prevent preemption of that thread on its CPU, which is accomplished
+by disabling interrupts. See @func{lock_own_ready_queue ()} in @file{threads/thread.c}
+for an example.
+
+@node Project 1 Tests
+@section Test Overview
+
+Testing the correct behavior of a scheduler can be tricky.  On the one hand,
+tests need to verify that the desired policy is implemented correctly,
+which tends to favor a unit-test based approach.  On the other hand, the
+scheduler implementation must work in an actual kernel environment to
+schedule a workload of real threads.
+
+For this project, we pursue a dual approach to testing that includes both
+simulation and actual execution.  The simulator framework is built into the Pintos
+kernel, ensuring no changes are needed to your scheduler for testing.
+
+@b{Simulated Tests.}
+The majority of CFS tests is performed under the simulated scheduler.
+In these tests, we do not actually create or schedule any real threads.
+Instead, the scheduler simulator simulates how threads would be scheduled
+under your scheduler. 
+The simulator framework asks your scheduler for which
+scheduling decisions to make at which point, but it does not actually switch
+between threads.  Instead, it verifies that the correct thread is selected to run 
+at the correct time, based on the algorithm.
+As such, it is able to create a wide variety of scheduling scenarios and check 
+if your scheduler makes the correct decisions. 
+See @file{tests/threads/cfstest.c} and @file{tests/threads/simulator.c}.
+
+The tests are set up in functions
+@func{cfstest_set_up} and @func{cfstest_tear_down}, defined in @file{tests/threads/cfstest.c}.
+The simulator sets up a ``fake CPU'' that does not represent an actual
+CPU on the hardware, but rather a virtual environment where the simulator 
+can create threads, execute timer interrupts, etc., without affecting the 
+system. During setup, @func{change_cpu} is called so that the CPU local
+variable @code{cpu} points to the fake CPU. After that, all OS events are 
+directed towards the simulated CPU, causing your scheduler to be invoked
+in the process. The real CPU is restored at the end of the test. 
+
+During the simulated testing, interrupts are disabled, so no real timer interrupts
+will arrive. Timer interrupts are simulated
+by setting the system time via @func{timer_settime} and then executing
+@func{driver_interrupt_tick}, which in turn invokes @func{driver_tick}.
+These functions are almost identical to @func{timer_interrupt} in 
+@file{devices/timer.c} and @func{thread_tick} in @file{thread.c} respectively.
+
+At the beginning of each test, the system time is set to 0, so any time spent
+prior to the test does not affect the test. Each test defines a set of OS events
+that arrive after a certain amount of time. Each OS event is a scheduling event
+that will invoke your scheduler. At the end of each event, the test checks that the
+thread that your scheduler would run at the end of the event is the correct one. The
+real time is restored at the end of the test.
+
+@i{Restrictions.}  While in simulated testing mode, your scheduler code is
+exercised very similar to how it is exercised during actual operation.
+However, you must be careful not to call functions that assume that the
+machine is operating on the real CPU.  These include most functions in
+@file{threads/thread.c}, including @func{thread_current()} and @func{thread_yield()}.
+This includes functions that may call those function transitively.
+
+In addition, since the simulator replaces most functions in @file{threads/thread.c}
+with its own while operating, changes you may make to functions in that file
+will not be used during simulation.  As a concrete example, you cannot
+update scheduler values such as @var{ideal_vruntime} in @func{thread_set_nice},
+@xref{Completely Fair Scheduler}.
+
+We hope to release these restrictions in future versions of Pintos.
+
+Note that your scheduler's @func{sched_init} function will be called for
+every ready queue on which it operates: that is, once for each (real) CPU
+found on the system, and once for the simulated CPU used during testing.
+Furthermore, to successfully run the tests, it needs to support real
+operation prior to @func{cfstest_set_up()} and post @func{cfstest_tear_down()}.
+
+@b{Real Workload Tests.}
+The alarm, cfs-run, and balance tests do not run the simulator, but rather schedule 
+real threads doing work under your scheduler to ensure that your scheduler works 
+under real conditions. 
+
+Since both the driver and @file{thread.c} calls into the same module 
+@file{threads/scheduler.c}, you should not have to make any special changes 
+to make Pintos invoke your scheduler, provided that you do not remove
+any of its exported functions.
+
+The real workload tests take significantly longer to run than the simulated ones.
+
+@node Project 1 FAQ
+@section FAQ
+
+@table @b
+
+@c @item How much code will I need to write?
+@c 
+@c Here's a summary of our reference solution, produced by the
+@c @command{diffstat} program.  The final row gives total lines inserted
+@c and deleted; a changed line counts as both an insertion and a deletion.
+@c 
+@c The reference solution represents just one possible solution.  Many
+@c other solutions are also possible and many of those differ greatly from
+@c the reference solution.  Some excellent solutions may not modify all the
+@c files modified by the reference solution, and some may modify files not
+@c modified by the reference solution.
+
+@c @verbatim
+@c  We can fill that once we have refined the project enough to have a good reference solution.
+@c @end verbatim
+
+@item How do I update the @file{Makefile}s when I add a new source file?
+
+@anchor{Adding Source Files}
+To add a @file{.c} file, edit the top-level @file{Makefile.build}.
+Add the new file to variable @samp{@var{dir}_SRC}, where
+@var{dir} is the directory where you added the file.  For this
+project, that means you should add it to @code{threads_SRC} or
+@code{devices_SRC}.  Then run @code{make}.  If your new file
+doesn't get
+compiled, run @code{make clean} and then try again.
+
+When you modify the top-level @file{Makefile.build} and re-run
+@command{make}, the modified
+version should be automatically copied to
+@file{threads/build/Makefile}.  The converse is
+not true, so any changes will be lost the next time you run @code{make
+clean} from the @file{threads} directory.  Unless your changes are
+truly temporary, you should prefer to edit @file{Makefile.build}.
+
+A new @file{.h} file does not require editing the @file{Makefile}s.
+
+@item What does @code{warning: no previous prototype for `@var{func}'} mean?
+
+It means that you defined a non-@code{static} function without
+preceding it by a prototype.  Because non-@code{static} functions are
+intended for use by other @file{.c} files, for safety they should be
+prototyped in a header file included before their definition.  To fix
+the problem, add a prototype in a header file that you include, or, if
+the function isn't actually used by other @file{.c} files, make it
+@code{static}.
+
+@item What is the interval between timer interrupts?
+
+Timer interrupts occur @code{TIMER_FREQ} times per second. 
+The default is 1000Hz. It is set in @file{devices/timer.h}.
+We do not recommend changing it, since it may cause some of the
+tests to fail.
+
+@item How long is a time slice?
+
+There are @code{TIME_SLICE} ticks per time slice.  This macro is
+declared in @file{threads/thread.c}.  The default is 4 ticks.
+However, in Project 1 you will change the scheduler to dynamically
+calculate an ideal timeslice, under the unit of nanoseconds rather than
+ticks.
+
+@item How do I run the tests?
+
+@xref{Testing}.
+
+@item Why do I get a test failure in @func{pass}?
+
+@anchor{The pass function fails}
+You are probably looking at a backtrace that looks something like this:
+
+@example
+0xc0108810: debug_panic (lib/kernel/debug.c:32)
+0xc010a99f: pass (tests/threads/tests.c:93)
+0xc010bdd3: test_mlfqs_load_1 (...threads/mlfqs-load-1.c:33)
+0xc010a8cf: run_test (tests/threads/tests.c:51)
+0xc0100452: run_task (threads/init.c:283)
+0xc0100536: run_actions (threads/init.c:333)
+0xc01000bb: main (threads/init.c:137)
+@end example
+
+This is just confusing output from the @command{backtrace} program.  It
+does not actually mean that @func{pass} called @func{debug_panic}.  In
+fact, @func{fail} called @func{debug_panic} (via the @func{PANIC}
+macro).  GCC knows that @func{debug_panic} does not return, because it
+is declared @code{NO_RETURN} (@pxref{Function and Parameter
+Attributes}), so it doesn't include any code in @func{fail} to take
+control when @func{debug_panic} returns.  This means that the return
+address on the stack looks like it is at the beginning of the function
+that happens to follow @func{fail} in memory, which in this case happens
+to be @func{pass}.
+
+@xref{Backtraces}, for more information.
+
+@end table
+
+@menu
+* Alarm Clock FAQ::             
+* Fair Scheduler FAQ::      
+* Load Balancer FAQ::
+@end menu
+
+@node Alarm Clock FAQ
+@subsection Alarm Clock FAQ
+
+@table @b
+@item Do I need to account for timer values overflowing?
+
+Don't worry about the possibility of timer values overflowing.  Timer
+values are expressed as signed 64-bit numbers, which at 100 ticks per
+second should be good for almost 2,924,712,087 years.  By then, we
+expect Pintos to have been phased out of the @value{coursenumber} curriculum.
+@end table
+
+@node Fair Scheduler FAQ
+@subsection Fair Scheduler FAQ
+
+@table @b
+@item What data structure should we use to maintain the ready queue?
+
+Linux's implementation of @acronym{CFS} uses a red/black tree to implement
+insertion and retrieval in O(log n) time.  For the purposes of this
+project, it is acceptable for these operations to be performed in O(n)
+time.
+
+@item Some scheduler tests fail and I don't understand why.  Help!
+
+If your implementation mysteriously fails some of the advanced
+scheduler tests, try the following:
+
+@itemize
+@item
+Read the source files for the tests that you're failing, to make sure
+that you understand what's going on.  Each one has a comment at the
+top that explains its purpose and expected results.
+
+@item
+For the driver-related tests, make sure you understand how the scheduling
+driver works. Then, check which assertion you are failing. The tests call
+your scheduler multiple times under different events, and assert that the
+correct thread is running. See which one the test expects, and why your 
+code is not selecting the right thread to run. Beware of off-by-one errors.
+@end itemize
+
+@end table
+
+@node Load Balancer FAQ
+@subsection Load Balancer FAQ
+
+@table @b
+@item How do we select which threads to migrate?
+
+You should think about how your policy retains the potential for threads
+to retain processor affinity.
+
+@item The synch tests take forever!
+
+Race conditions are, by nature, not guaranteed to occur. The goal of the test
+is to fail with high probability if race conditions are present. We designed them
+by identifying the critical sections that you will have to protect with synchronization,
+and entering the critical sections enough times that it is likely two threads will try
+to enter at the same time, either because a timer interrupt preempted the first thread or
+because they are running on different CPUs. The critical sections are rather small, so
+the tests have to be repeated, which leads to high execution time.
+
+You can try speeding the tests up by enabling KVM if it is available to you, but it is not guaranteed
+to help because the speedup provided by KVM may make the already-small critical sections even
+smaller, meaning it may not produce a failure even if race conditions are present.
+Remember that timer interrupts still come at the same time intervals, despite the code
+running a lot faster. Instead we recommend writing a script to run the tests many times (and in parallel,
+by using tmux for example) and saving output in case of a kernel panic.
+@end table
+

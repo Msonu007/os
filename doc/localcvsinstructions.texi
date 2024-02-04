@@ -1,0 +1,259 @@
+@c
+@c Instructions on how to set up a group environment, permissions, 
+@c CVS repository, dealing with local locking issues etc.
+@c
+@c While some of the discussion may apply to more than one environment,
+@c no attempt was made to untangle and split the discussion.
+@c
+
+@menu
+* Setting Up CVS::              
+* Using CVS::                   
+* CVS Locking::
+* Setting Up ssh::                 
+@end menu
+
+@node Setting Up CVS
+@subsection Setting Up CVS
+
+To set up CVS for use with Pintos, start by choosing one group member 
+as the keeper of the CVS repository. Everyone in the group will be able 
+to use the CVS repository, but the keeper will actually create the 
+repository and maintain permissions for its contents.
+
+The following instructions are specific to our local setup, starting with the
+Fall 2006 semester.  Even if you've used CVS before, we ask that 
+you read the instructions in their entirety.
+
+Repositories must be created on the machine 'ap2.cs.vt.edu'. This machine
+contains a directory that was specially set up for CS 3204 students' CVS repositories.  
+To access the repository from the other machines, you
+should first configure ssh to log you on automatically, without requiring a password
+every time. 
+@xref{Setting Up ssh}, for more information.
+To connect to this machine use @samp{ssh ap2.cs.vt.edu} from your machine. 
+You should not be prompted for a password if you have configured ssh properly.
+
+The keeper has to perform several steps to set up the repository.
+First, log on to 'ap2.cs.vt.edu' and create a directory for storing
+the repository. The new directory must be created in the directory
+@file{/shared/cs3204} and should be named @file{Proj-@var{keeper_pid}},
+where @var{keeper_pid} is the pid of the keeper. Next, configure access
+to repository using the command
+@samp{setfacl --set u::rwx,g::---,o::--- Proj-@var{keeper_pid}}.
+This command ensures that the user, i.e the keeper has the required
+permissions to access the repository, and no one else does. To set permissions for the other members in the group,
+use @samp{setfacl -m u:@var{member_pid}:rwx Proj-@var{keeper_pid}} for each
+of the other members in the group, replacing @var{member_pid} with the pid of the group
+member. 
+
+Next, set the permissions of the directories and files that would be created inside the
+repository using the command
+@samp{setfacl -d --set u::rwx,g::---,o::--- Proj-@var{keeper_pid}}.
+To permit all the members of the group access to all the files and directories created in the repository, use 
+@samp{setfacl -d -m u:@var{member_pid}:rwx Proj-@var{keeper_pid}} once for each group
+member (should be used once for the keeper too), replacing @var{member_pid} with the pid of the group
+member. To make sure that the permissions are set correctly, use @samp{getfacl Proj-@var{keeper_pid}}.
+
+Note that neither (Unix-) group members nor others should have read access to your CVS
+repository, hence the @samp{g::---,o::---} part of the access control list. 
+(Giving access to group members (in the Unix sense) would give access to, for instance, 
+all CS majors if your default (Unix-) group is Major.  
+We use ACLs to give individual access to your CS 3204 group members.)
+@strong{Failing to protect your repository in this way is an honor code violation.}
+
+Now initialize the repository. To initialize the repository, execute
+@samp{cvs -d /shared/cs3204/Proj-@var{keeper_pid} init}.
+
+Finally, import the Pintos sources into the newly initialized
+repository.  If you have an existing set of Pintos sources you want to
+add to the repository, @samp{cd} to its @samp{pintos} directory now.
+Otherwise, to import the base Pintos source tree, @samp{cd} to
+@file{/home/courses/cs3204/pintos/pintos} (note the doubled
+@samp{pintos}).  After changing the current directory, execute this
+command:
+@example
+cvs -d /shared/cs3204/Proj-@var{keeper_pid} import -m "Imported sources" pintos foobar start
+@end example
+
+Here is a summary of the commands you have now executed:
+
+@example
+ssh ap2.cs.vt.edu
+cd /shared/cs3204
+mkdir Proj-@var{keeper_pid}
+setfacl --set u::rwx,g::---,o::--- Proj-@var{keeper_pid}
+# for all other group members do:
+setfacl -m u:@var{member-pid}:rwx Proj-@var{keeper_pid}
+setfacl -d --set u::rwx,g::---,o::--- Proj-@var{keeper_pid}
+# for all group members, including the keeper, do:
+setfacl -d -m u:@var{member_pid}:rwx Proj-@var{keeper_pid}
+cvs -d /shared/cs3204/Proj-@var{keeper_pid} init
+cd /home/courses/cs3204/pintos/pintos
+cvs -d /shared/cs3204/Proj-@var{keeper_pid} import -m "Imported sources" pintos foobar start
+@end example
+
+The repository is now ready for use by any group member, as described
+below. Having set the repository up, you need not log on to 'ap2.cs.vt.edu'
+for any other purposes. Keep in mind that the repository should only be accessed
+using CVS commands---it is not generally useful to examine the repository files by
+hand, and you should definitely not modify them yourself. 
+
+Due to space constraints, 'ap2.cs.vt.edu'should be used only to store the repository
+and not for development purposes.  Do not store any other files there and do not
+run any other programs on this machine.  The reason for this somewhat unusual
+setup is that our shared file servers currently do not support the @samp{setfacl}
+commands, making it impossible to protect your CVS repository.
+
+@node Using CVS
+@subsection Using CVS
+
+If you are using an IDE, check whether it supports CVS automatically.
+
+Some of the CVS commands require you to specify the location of the repository. As the
+repository has been set up in the machine 'ap2.cs.vt.edu' and you would not be using this
+machine for development purposes, you have to use 
+@file{:ext:@var{your_pid}@@ap2:/shared/cs3204/Proj-@var{keeper_pid}} as the location of
+the repository. @var{your_pid} is your pid and is needed to log you on to 'ap2.cs.vt.edu'.
+CVS runs on top of ssh.  Therefore,
+before using any of the CVS commands, make sure you have configured ssh to log you on without prompting for password
+(@xref{Setting Up ssh}, for more information) and set the environment variable CVS_RSH to @file{/usr/bin/ssh}. 
+Under csh you can set this
+environment variable using @samp{setenv CVS_RSH /usr/bin/ssh}. To avoid having to type this
+line everytime you log on, add this line to the '.cshrc' file in your home directory.
+ 
+To use CVS, start by checking out a working copy of the contents of the
+CVS repository into a directory named @file{@var{dir}}.  To do so, execute
+@samp{cvs -d :ext:@var{your_pid}@@ap2:/shared/cs3204/Proj-@var{keeper_pid} checkout -d @var{dir} pintos}.
+If this fails due to some kind of permission problem, the CVS
+repository may not be initialized properly.
+
+Note that there are two @samp{-d} switches in the previous command. The first switch specifies
+the location of the CVS repository to which the command applies.  In this case,
+the repository is located on the machine @var{ap2} and is reachable via ssh with your_pid.
+The second @samp{-d} switch is specific to the cvs checkout command.  It specifies
+the local directory into which to check out the module 'pintos'.  If omitted, pintos
+will be checked out into a directory called 'pintos'.
+
+Your working copy is kept in your undergrad file space.  Unlike the CVS repository,
+this directory is shared among the lab machines, so you do not need to be logged on
+to any specific machine to use it. 
+Like the CVS repository, you must read-protect your working copy from 
+(Unix-) group members and others to comply with the honor code.
+@samp{chmod -R go-rwx @var{dir}} will read-protect your working directory.
+
+At this point, you can modify any of the files in the working copy.
+You can see the changes you've made with @samp{cvs diff -u}.  If you
+want to commit these changes back to the repository, making them
+visible to the other group members, you can use the CVS commit
+command.  Within the @file{pintos} directory, execute @samp{cvs
+commit}.  This will figure out the files that have been changed and
+fire up a text editor for you to describe the changes.  By default,
+this editor is @file{vi}, but you can select a different editor by
+setting the @env{CVSEDITOR} environment variable, e.g.@: with
+@samp{setenv CVSEDITOR emacs} (add this line to your @file{.cshrc} to
+make it permanent).
+
+Suppose another group member has committed changes.  You can see the
+changes committed to the repository since the time you checked it out
+(or updated from it) with @samp{cvs diff -u -r BASE -r HEAD}.  You can
+merge those change into your working copy using @samp{cvs update}.  If
+any of your local changes conflict with the committed changes, the CVS
+command output should tell you.  In that case, edit the files that
+contain conflicts, looking for @samp{<<<} and @samp{>>>} that denote
+the conflicts, and fix the problem.
+
+You can view the history of @var{file} in your working directory,
+including the log messages, with @samp{cvs log @var{file}}.
+
+You can give a particular set of file versions a name called a
+@dfn{tag}.  First @samp{cd} to the root of the working copy, then
+execute @samp{cvs tag @var{name}}.  It's best to have no local changes
+in the working copy when you do this, because the tag will not include
+uncommitted changes.  To recover the tagged repository later, use the
+@samp{checkout} command in the form
+@samp{cvs -d :ext:@var{your_pid}@@ap2:/shared/cs3204/Proj-@var{keeper_pid} checkout -r @var{tag} -d @var{dir} pintos},
+where @var{dir} is the directory to put the tagged repository into.
+
+If you add a new file to the source tree, you'll need to add it to the
+repository with @samp{cvs add @var{file}}.  This command does not have
+lasting effect until the file is committed later with @samp{cvs
+commit}.
+
+To remove a file from the source tree, first remove it from the file
+system with @command{rm}, then tell CVS with @samp{cvs remove
+@var{file}}.  Again, only @samp{cvs commit} will make the change
+permanent.
+
+To discard your local changes for a given file, without committing
+them, use @samp{cvs update -C @var{file}}.
+
+To check out a version of your repository as of a particular date, use
+the command 
+@samp{cvs -d :ext:@var{your_pid}@@ap2:/shared/cs3204/Proj-@var{keeper_pid} checkout -D '@var{date}' -d @var{dir} pintos},
+where @var{dir} is the directory to put the tagged repository into.  A typical format for
+@var{date} is @samp{YYYY-MM-DD HH:MM}, but CVS accepts several formats,
+even something like @samp{1 hour ago}.
+
+For more information, visit the @uref{http://www.cvshome.org/, , CVS
+home page}.
+
+If you are using an IDE, check whether it supports CVS automatically.
+
+@node CVS Locking
+@subsection CVS Locking
+
+You might occasionally see a message like this while using CVS:
+
+@example
+waiting for member_pid's lock in /shared/cs3204/Proj-keeper_pid/cvsroot/foo
+@end example
+
+This normally means that more than one user is accessing the repository
+at the same time.  CVS should automatically retry after 30 seconds, at
+which time the operation should normally be able to continue.
+
+If you encounter a long wait for a lock, of more than a minute or so, it
+may indicate that a CVS command did not complete properly and failed to
+remove its locks.  If you think that this is the case, ask the user in
+question about it.  If it appears that an operation did go awry, then
+you (or the named user) can delete files whose names start with
+@file{#cvs.rfl}, @file{#cvs.wfl}, or @file{#cvs.lock} in the directory
+mentioned in the message.  Doing so should allow your operation to
+proceed.  Do not delete or modify other files.
+
+@node Setting Up ssh
+@subsection Setting Up ssh
+
+Ssh can be configured to log you on to any of the Remote Linux Cluster
+machines from any machine, without you having to enter your password. 
+To enable automatic login, perform the following steps after logging on to any
+of the rlogin machines.
+@itemize
+@item
+@samp{ssh-keygen -t rsa -N ""} 
+On your screen you should see something similar to what is shown below.
+@example
+Generating public/private rsa key pair.
+Enter file in which to save the key (/home/ugrads/your_pid/.ssh/id_rsa):
+Your identification has been saved in /home/ugrads/your_pid/.ssh/id_rsa.
+Your public key has been saved in /home/ugrads/your_pid/.ssh/id_rsa.pub.
+The key fingerprint is:
+34:45:6d:4a:51:4e:1f:af:fe:66:dd:a9:a5:23:46:bb your_pid@@some_machine.cslab
+@end example
+Accept the defaults. This command creates a new file @file{id_rsa.pub} in
+the directory @file{$HOME/.ssh} if the default location is chosen.
+@item
+@samp{cd $HOME/.ssh}
+@item
+@samp{cat id_rsa.pub >> authorized_keys}
+@item
+@samp{cd $HOME}
+@item
+@samp{chmod 700 .ssh}
+@end itemize
+
+To make sure that you have configured it correctly, try ssh'ing to another machine in the Remote Login Linux Cluster (rlogin).
+You should not be prompted for your password. If it is the first time
+you are ssh'ing to some machine, you might have to type @samp{yes} to continue connecting.
+

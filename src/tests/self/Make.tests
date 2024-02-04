@@ -1,0 +1,31 @@
+# -*- makefile -*-
+
+# Test names.
+tests/self_TESTS = $(addprefix tests/self/, \
+change-cpu \
+atomics \
+all-list \
+ipi \
+ipi-blocked \
+ipi-all \
+cli-print \
+savecallerinfo \
+spinlock \
+)
+
+# Sources for tests.
+tests/self_SRC  = tests/self/tests.c
+tests/self_SRC += tests/self/change-cpu.c
+tests/self_SRC += tests/self/atomics.c
+tests/self_SRC += tests/self/spinlock.c
+tests/self_SRC += tests/self/all-list.c
+tests/self_SRC += tests/self/ipi.c
+tests/self_SRC += tests/self/ipi-missed.c
+tests/self_SRC += tests/self/cli-print.c
+tests/self_SRC += tests/self/savecallerinfo.c
+tests/self_SRC += tests/self/console.c
+tests/self_SRC += tests/self/wallclock-est.c
+
+tests/self/ipi.output: SMP = 8
+tests/self/ipi-blocked.output: SMP = 8
+tests/self/ipi-all.output: SMP = 8

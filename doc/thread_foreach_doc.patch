@@ -1,0 +1,54 @@
+Index: debug.texi
+===================================================================
+RCS file: /var/lib/cvs/pintos/doc/debug.texi,v
+retrieving revision 1.35
+diff -u -r1.35 debug.texi
+--- debug.texi	17 Nov 2007 09:42:26 -0000	1.35
++++ debug.texi	8 Sep 2008 01:43:01 -0000
+@@ -99,6 +99,8 @@
+ functions that were running at the time of the panic.  You can also
+ insert a call to @func{debug_backtrace}, prototyped in
+ @file{<debug.h>}, to print a backtrace at any point in your code.
++@func{debug_backtrace_all}, also declared in @file{<debug.h>}, 
++prints backtraces of all threads.
+ 
+ The addresses in a backtrace are listed as raw hexadecimal numbers,
+ which are difficult to interpret.  We provide a tool called
+Index: reference.texi
+===================================================================
+RCS file: /var/lib/cvs/pintos/doc/reference.texi,v
+retrieving revision 1.19
+diff -u -r1.19 reference.texi
+--- reference.texi	24 Jan 2008 18:49:45 -0000	1.19
++++ reference.texi	8 Sep 2008 01:43:02 -0000
+@@ -325,6 +325,13 @@
+ priority scheduling in project 1 (@pxref{Priority Scheduling}).
+ @end deftypecv
+ 
++@deftypecv {Member} {@struct{thread}} {@struct{list_elem}} allelem
++This ``list element'' is used to link the thread into the list of all
++threads.  Each thread is inserted into this list when it is created
++and removed when it exits.  The @func{thread_foreach} function should 
++be used to iterate over all threads.
++@end deftypecv
++
+ @deftypecv {Member} {@struct{thread}} {@struct{list_elem}} elem
+ A ``list element'' used to put the thread into doubly linked lists,
+ either @code{ready_list} (the list of threads ready to run) or a list of
+@@ -446,6 +453,16 @@
+ time.
+ @end deftypefun
+ 
++@deftypefun void thread_foreach (thread_action_func *@var{action}, void *@var{aux})
++Iterates over all threads @var{t} and invokes @code{action(t, aux)} on each.
++@var{action} must refer to a function that matches the signature 
++given by @func{thread_action_func}:
++
++@deftp {Type} {void thread_action_func (struct thread *@var{thread}, void *@var{aux})}
++Performs some action on a thread, given @var{aux}.
++@end deftp
++@end deftypefun
++
+ @deftypefun int thread_get_priority (void)
+ @deftypefunx void thread_set_priority (int @var{new_priority})
+ Stub to set and get thread priority.  @xref{Priority Scheduling}.

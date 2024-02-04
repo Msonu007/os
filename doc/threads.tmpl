@@ -1,0 +1,156 @@
+			+--------------------+
+			|        CS 4284     |
+			| PROJECT 1: THREADS |
+			|   DESIGN DOCUMENT  |
+			+--------------------+
+				   
+---- YOU ----
+
+>> Fill in your name and email address
+
+FirstName LastName <email@domain.example>
+
+---- PRELIMINARIES ----
+
+>> If you have any preliminary comments on your submission, notes for the
+>> TAs, or extra credit, please give them here.
+
+>> Please cite any offline or online sources you consulted while
+>> preparing your submission, other than the Pintos documentation, course
+>> text, lecture notes, and course staff.
+
+			     ALARM CLOCK
+			     ===========
+
+---- DATA STRUCTURES ----
+
+>> A1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+---- ALGORITHMS ----
+
+>> A2: Briefly describe what happens in a call to timer_sleep(),
+>> including the effects of the timer interrupt handler.
+
+>> A3: What steps are taken to minimize the amount of time spent in
+>> the timer interrupt handler?
+
+---- SYNCHRONIZATION ----
+
+>> A4: How are race conditions avoided when multiple threads call
+>> timer_sleep() simultaneously?
+
+>> A5: How are race conditions avoided when a timer interrupt occurs
+>> during a call to timer_sleep()?
+
+---- RATIONALE ----
+
+>> A6: Why did you choose this design?  In what ways is it superior to
+>> another design you considered?
+
+>> A7: Every CPU has its own timer, and therefore executes the 
+>> interrupt handler independently. How has this affected your design?
+
+			  ADVANCED SCHEDULER
+			  ==================
+
+---- DATA STRUCTURES ----
+
+>> B1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+---- ALGORITHMS ----
+
+>> B2: Explain briefly what your scheduler does when each of the following happens:
+>> Thread is created
+>> Current thread blocks
+>> Thread is unblocked
+>> Current thread yields
+>> Timer tick arrives
+
+>> B3: What steps did you take to make sure that the idle thread is not 
+>> taken into account in any scheduling decisions?
+
+---- RATIONALE ----
+
+>> B4: Briefly critique your design, pointing out advantages and
+>> disadvantages in your design choices.  If you were to have extra
+>> time to work on this part of the project, how might you choose to
+>> refine or improve your design?
+
+			     LOAD BALANCER
+			     =============
+
+---- DATA STRUCTURES ----
+
+>> C1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+---- ALGORITHMS ----
+
+>> C2: When is load balancing invoked? Is this enough to ensure
+>> that no CPUs are idle while there are threads in any ready queue?
+
+>> C3: Briefly describe what happens in a call to load_balance()
+
+>> C4: What steps are taken to ensure migrated threads do not
+>> monopolize the CPU if they had significantly lower vruntimes
+>> than the other threads when they migrated?
+
+>> C5: Let's say hypothetically that CPU0 has 100 threads while 
+>> CPU1 has 102 threads, and each thread has the same nice value.
+>> CPU0 calls load_balance(). Do any tasks get migrated? If not,
+>> what are some possible advantages to refraining from migrating
+>> threads in that scenario?
+
+---- SYNCHRONIZATION ----
+
+>> C6: How are race conditions avoided when a CPU looks at another
+>> CPU's load, or pulling threads from another CPU?
+
+>> C7: It is possible, although unlikely, that two CPUs may try to load
+>> balance from each other at the same time. How do you avoid potential
+>> deadlock?
+
+---- RATIONALE ----
+
+>> C8: If you deviated from the specifications, explain why. In what ways was your
+>> implementation superior to the one specified?
+
+               MISC
+               ====
+
+>> D1: In Pintos, timer interrupts are issued periodically at a 
+>> predetermined frequency. In contrast, advanced systems like Linux have
+>> adopted a tickless kernel approach, where the timer interrupt is not
+>> issued periodically but rather set to arrive on-demand. Looking back at 
+>> at some of the inefficiencies that may have crept into your alarm clock,
+>> scheduler, and load balancer, in what ways would on-demand interrupts have
+>> been beneficial? Please be specific.
+
+			   SURVEY QUESTIONS
+			   ================
+
+Answering these questions is optional, but it will help us improve the
+course in future quarters.  Feel free to tell us anything you
+want--these questions are just to spur your thoughts.  You may also
+choose to respond anonymously in the course evaluations at the end of
+the quarter.
+
+>> In your opinion, was this assignment, or any one of the three problems
+>> in it, too easy or too hard?  Did it take too long or too little time?
+
+>> Did you find that working on a particular part of the assignment gave
+>> you greater insight into some aspect of OS design?
+
+>> Is there some particular fact or hint we should give students in
+>> future quarters to help them solve the problems?  Conversely, did you
+>> find any of our guidance to be misleading?
+
+>> Do you have any suggestions for the TAs to more effectively assist
+>> students, either for future quarters or the remaining projects?
+
+>> Any other comments?

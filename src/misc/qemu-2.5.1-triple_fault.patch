@@ -1,0 +1,31 @@
+--- ./target-i386/excp_helper.c~	2016-03-29 17:01:19.000000000 -0400
++++ ./target-i386/excp_helper.c	2017-01-27 22:59:15.639696177 -0500
+@@ -21,6 +21,7 @@
+ #include "qemu/log.h"
+ #include "sysemu/sysemu.h"
+ #include "exec/helper-proto.h"
++#include "cpu-qom.h"
+ 
+ void helper_raise_interrupt(CPUX86State *env, int intno, int next_eip_addend)
+ {
+@@ -47,16 +48,15 @@
+ 
+     qemu_log_mask(CPU_LOG_INT, "check_exception old: 0x%x new 0x%x\n",
+                 env->old_exception, intno);
+-
+ #if !defined(CONFIG_USER_ONLY)
+     if (env->old_exception == EXCP08_DBLE) {
+         if (env->hflags & HF_SVMI_MASK) {
+             cpu_vmexit(env, SVM_EXIT_SHUTDOWN, 0); /* does not return */
+         }
+-
+-        qemu_log_mask(CPU_LOG_RESET, "Triple fault\n");
+-
+-        qemu_system_reset_request();
++        qemu_log_mask(CPU_LOG_RESET, "Triple fault\n"); 
++        X86CPU *cpu = x86_env_get_cpu(env);
++        CPUState *cs = CPU(cpu);
++        cpu_abort(cs, "Triple fault\n");
+         return EXCP_HLT;
+     }
+ #endif

@@ -1,0 +1,17 @@
+Functionality of advanced scheduler:
+3	cfs-create-new
+3	cfs-idle
+3	cfs-yield
+3	cfs-tick
+3	cfs-delayed-tick
+3	cfs-sleeper
+3	cfs-short-sleeper
+3	cfs-sleeper-minvruntime
+3	cfs-new-minvruntime
+3	cfs-nice
+3	cfs-renice
+3	cfs-idle-unblock
+3	cfs-vruntime
+
+1	cfs-run-batch
+1	cfs-run-iobound
